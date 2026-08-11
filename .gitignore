@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+/.tmail-test/
+.agents/
+.codex/
+.env
+.env.*
+!.env.demo
+docs/research/
