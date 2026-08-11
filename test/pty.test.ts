@@ -11,7 +11,7 @@ describe.skipIf(!runPty)("packaged PTY", () => {
       cols: 80,
       rows: 24,
       cwd: process.cwd(),
-      env: { ...process.env, TMAIL_ENABLE_DEMO: "1", NO_COLOR: "1" },
+      env: { ...process.env, CI: "true", TMAIL_ENABLE_DEMO: "1", NO_COLOR: "1" },
     });
     let output = "";
     terminal.onData((chunk) => {
@@ -34,5 +34,5 @@ describe.skipIf(!runPty)("packaged PTY", () => {
     });
 
     expect(output).toContain("Select an account");
-  });
+  }, 10_000);
 });

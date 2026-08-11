@@ -17,7 +17,7 @@ if (args.length === 0) {
       import("react"),
       import("./tui/app.js"),
     ]);
-    const instance = render(React.createElement(App, { runtime }));
+    const instance = render(React.createElement(App, { runtime }), { interactive: true });
     await instance.waitUntilExit();
   }
 } else {
