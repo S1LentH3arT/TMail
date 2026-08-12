@@ -57,6 +57,17 @@ Service/D-Bus keyring is required. macOS uses Keychain and Windows uses Credenti
 the system keyring adapter. TMail refuses to store credentials in plaintext when the keyring is
 unavailable.
 
+For local development, expose the package's existing `tmail` executable on your PATH once:
+
+```sh
+npm run build
+npm link
+tmail
+```
+
+The link points at the current checkout, so subsequent builds are immediately available through
+the `tmail` command. Run `npm unlink -g tmail-cli` to remove it.
+
 Quality gates:
 
 ```sh
