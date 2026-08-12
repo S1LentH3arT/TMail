@@ -50,6 +50,13 @@ export function AddAccountScreen({ runtime, onBack, onConnected }: AddAccountScr
         setError(`${provider?.label ?? "This provider"} is planned but is not available yet.`);
         return;
       }
+      if (!runtime.gmail.configured) {
+        setStatus(undefined);
+        setError(
+          "Gmail OAuth is not configured. Set TMAIL_GOOGLE_CLIENT_ID to an approved Desktop app client ID.",
+        );
+        return;
+      }
       const authorization = new AbortController();
       controller.current = authorization;
       setBusy(true);
@@ -69,8 +76,9 @@ export function AddAccountScreen({ runtime, onBack, onConnected }: AddAccountScr
         .then(() => onConnected())
         .catch((cause: unknown) => {
           const failure = toTmailError(cause);
+          setStatus(undefined);
           if (failure.code === "CANCELLED") {
-            setStatus(undefined);
+            setError(undefined);
           } else {
             setError(failure.message);
           }
