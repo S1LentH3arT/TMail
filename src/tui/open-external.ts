@@ -8,5 +8,6 @@ export function openExternal(url: string): void {
         ? "explorer.exe"
         : "xdg-open";
   const child = spawn(command, [url], { detached: true, stdio: "ignore" });
+  child.on("error", () => undefined);
   child.unref();
 }

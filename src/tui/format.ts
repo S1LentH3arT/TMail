@@ -28,10 +28,13 @@ export function padToWidth(value: string, width: number): string {
 }
 
 export function displayAddress(sender: MailAddress): string {
-  return sender.name?.trim() || sender.address;
+  return sender.name?.trim() || sender.address || "(unknown sender)";
 }
 
-export function formatReceivedAt(value: string, now = new Date()): string {
+export function formatReceivedAt(value: string | null, now = new Date()): string {
+  if (!value) {
+    return "—";
+  }
   const date = new Date(value);
   const sameYear = date.getFullYear() === now.getFullYear();
   const sameDay =
@@ -44,11 +47,13 @@ export function formatReceivedAt(value: string, now = new Date()): string {
 }
 
 export function cleanSummary(message: MessageSummary): MessageSummary {
-  const clean = (value: string) =>
+  const clean = (value: string | null) =>
     value
-      .replace(/[\r\n\t]+/gu, " ")
-      .replace(/\s+/gu, " ")
-      .trim();
+      ? value
+          .replace(/[\r\n\t]+/gu, " ")
+          .replace(/\s+/gu, " ")
+          .trim()
+      : "";
   return {
     ...message,
     sender: {
@@ -56,6 +61,6 @@ export function cleanSummary(message: MessageSummary): MessageSummary {
       ...(message.sender.name ? { name: clean(message.sender.name) } : {}),
     },
     subject: clean(message.subject) || "(no subject)",
-    snippet: clean(message.snippet),
+    snippet: clean(message.snippet) || null,
   };
 }

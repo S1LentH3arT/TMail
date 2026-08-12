@@ -4,12 +4,14 @@ import type { Account } from "../domain/account.js";
 import type { MessageSummary } from "../domain/message.js";
 import type { TmailRuntime } from "../runtime.js";
 import { HomeScreen } from "./home-screen.js";
+import { AddAccountScreen } from "./add-account-screen.js";
 import { MessageListScreen } from "./message-list-screen.js";
 import { ReaderScreen } from "./reader-screen.js";
 import { useTerminalSize } from "./use-terminal-size.js";
 
 type Screen =
   | { readonly kind: "home" }
+  | { readonly kind: "add-account" }
   | { readonly kind: "list"; readonly account: Account }
   | { readonly kind: "reader"; readonly account: Account; readonly message: MessageSummary };
 
@@ -35,6 +37,17 @@ export function App({ runtime }: { readonly runtime: TmailRuntime }) {
         columns={size.columns}
         rows={size.rows}
         onSelect={(account) => setScreen({ kind: "list", account })}
+        onAdd={() => setScreen({ kind: "add-account" })}
+      />
+    );
+  }
+
+  if (screen.kind === "add-account") {
+    return (
+      <AddAccountScreen
+        runtime={runtime}
+        onBack={() => setScreen({ kind: "home" })}
+        onConnected={() => setScreen({ kind: "home" })}
       />
     );
   }

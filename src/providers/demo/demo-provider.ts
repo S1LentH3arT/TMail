@@ -57,6 +57,7 @@ const messages: readonly Message[] = [
         filename: "build-summary.txt",
         contentType: "text/plain",
         size: 1_024,
+        inline: false,
       },
     ],
   },

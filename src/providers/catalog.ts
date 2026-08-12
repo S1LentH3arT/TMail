@@ -5,7 +5,7 @@ export interface ProviderDescriptor {
   readonly id: Exclude<AccountProvider, "demo">;
   readonly label: string;
   readonly releaseOrder: number;
-  readonly status: "planned";
+  readonly status: "planned" | "preview" | "available";
   readonly capabilities: ProviderCapabilities;
 }
 
@@ -40,3 +40,11 @@ export const PROVIDER_CATALOG: readonly ProviderDescriptor[] = [
     capabilities: plannedCapabilities,
   },
 ];
+
+export function providerCatalog(gmailConfigured: boolean): readonly ProviderDescriptor[] {
+  return PROVIDER_CATALOG.map((descriptor) =>
+    descriptor.id === "gmail" && gmailConfigured
+      ? { ...descriptor, status: "preview" as const }
+      : descriptor,
+  );
+}

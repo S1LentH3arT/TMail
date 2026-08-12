@@ -16,11 +16,15 @@ interface ReaderScreenProps {
   readonly onBack: () => void;
 }
 
-const HEADER_ALLOWLIST = ["message-id", "reply-to", "content-type"];
+const HEADER_ALLOWLIST = ["message-id", "content-type", "in-reply-to", "references"];
 
 function addresses(items: Message["to"]): string {
   return items
-    .map((item) => (item.name ? `${item.name} <${item.address}>` : item.address))
+    .map((item) =>
+      item.name && item.address
+        ? `${item.name} <${item.address}>`
+        : item.name || item.address || "(unknown address)",
+    )
     .join(", ");
 }
 
@@ -38,7 +42,7 @@ export function ReaderScreen({ account, summary, mail, rows, onBack }: ReaderScr
     void mail
       .read(account.id, summary.id, controller.signal)
       .then(async (loaded) => {
-        const normalized = await normalizeBody(loaded.body);
+        const normalized = loaded.body ? await normalizeBody(loaded.body) : undefined;
         if (!controller.signal.aborted) {
           setMessage(loaded);
           setBody(normalized);
@@ -95,11 +99,16 @@ export function ReaderScreen({ account, summary, mail, rows, onBack }: ReaderScr
 
   return (
     <Box flexDirection="column" paddingX={1}>
-      <Text bold>{message?.subject ?? summary.subject}</Text>
-      <Text>From: {message ? addresses([message.sender]) : summary.sender.address}</Text>
+      <Text bold>{message?.subject ?? summary.subject ?? "(no subject)"}</Text>
+      <Text>
+        From: {message ? addresses([message.sender]) : summary.sender.address || "(unknown sender)"}
+      </Text>
       {message ? <Text>To: {addresses(message.to)}</Text> : null}
       <Text>
-        Date: {new Date(message?.receivedAt ?? summary.receivedAt).toLocaleString("en-US")}
+        Date:{" "}
+        {(message?.receivedAt ?? summary.receivedAt)
+          ? new Date(message?.receivedAt ?? summary.receivedAt ?? "").toLocaleString("en-US")
+          : "—"}
       </Text>
       {showHeaders && message
         ? HEADER_ALLOWLIST.map((name) => (
@@ -112,7 +121,8 @@ export function ReaderScreen({ account, summary, mail, rows, onBack }: ReaderScr
       {error ? (
         <Text {...(!process.env.NO_COLOR ? { color: "red" as const } : {})}>× {error}</Text>
       ) : null}
-      {!body && !error ? <Text dimColor>Loading message…</Text> : null}
+      {!message && !error ? <Text dimColor>Loading message…</Text> : null}
+      {message && !body && !error ? <Text dimColor>(empty message)</Text> : null}
       {body ? (
         <Text wrap="truncate-end">
           {rendered.lines
@@ -128,7 +138,8 @@ export function ReaderScreen({ account, summary, mail, rows, onBack }: ReaderScr
       ) : null}
       {message?.attachments.map((attachment) => (
         <Text key={attachment.id} dimColor>
-          ◆ {attachment.filename} · {attachment.contentType} · {attachment.size} bytes
+          ◆ {attachment.filename ?? "(unnamed attachment)"} · {attachment.contentType} ·{" "}
+          {attachment.size} bytes{attachment.inline ? " · inline" : ""}
         </Text>
       ))}
       {linkChoice !== undefined ? (

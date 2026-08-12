@@ -17,9 +17,10 @@ export function MessageRow({
   const senderWidth = columns < 65 ? 14 : 20;
   const fixedWidth = 2 + 2 + senderWidth + (showDate ? 13 : 0);
   const contentWidth = Math.max(8, columns - fixedWidth - 2);
+  const subject = message.subject ?? "(no subject)";
   const subjectAndSnippet = showSnippet
-    ? `${message.subject}${message.snippet ? ` — ${message.snippet}` : ""}`
-    : message.subject;
+    ? `${subject}${message.snippet ? ` — ${message.snippet}` : ""}`
+    : subject;
 
   return (
     <Text

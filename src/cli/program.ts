@@ -1,9 +1,11 @@
 import process from "node:process";
 import { Command, CommanderError, Option } from "commander";
 import { normalizeBody } from "../body/normalize.js";
+import { toPublicAccount } from "../domain/account.js";
 import { TmailError, toTmailError } from "../domain/errors.js";
-import { PROVIDER_CATALOG } from "../providers/catalog.js";
+import { providerCatalog } from "../providers/catalog.js";
 import type { TmailRuntime } from "../runtime.js";
+import { openExternal } from "../tui/open-external.js";
 import { completionScript, type SupportedShell } from "./completion.js";
 import { failure, serializeEnvelope, success } from "./envelope.js";
 
@@ -33,6 +35,29 @@ function positiveInteger(value: string): number {
   return parsed;
 }
 
+async function withOperationTimeout<T>(
+  program: Command,
+  operation: (signal: AbortSignal) => Promise<T>,
+): Promise<T> {
+  const seconds = positiveInteger(program.opts<GlobalOptions>().timeout ?? "30");
+  const signal = AbortSignal.timeout(seconds * 1_000);
+  try {
+    return await operation(signal);
+  } catch (error) {
+    if (signal.aborted) {
+      throw new TmailError(
+        "TIMEOUT",
+        `The operation exceeded the ${seconds}-second timeout.`,
+        true,
+        {
+          cause: error,
+        },
+      );
+    }
+    throw error;
+  }
+}
+
 export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Command {
   const program = new Command();
   const write = (data: unknown, nextCursor?: string) => {
@@ -58,13 +83,13 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
   accounts
     .command("list")
     .description("List configured accounts.")
-    .action(async () => write({ accounts: await runtime.accounts.list() }));
+    .action(async () => write({ accounts: (await runtime.accounts.list()).map(toPublicAccount) }));
 
   accounts
     .command("add")
     .description("Connect an email account.")
     .addOption(new Option("--provider <provider>").choices(["gmail", "outlook", "proton"]))
-    .action((options: { provider?: string }) => {
+    .action(async (options: { provider?: string }) => {
       if (!options.provider && !io.isTTY) {
         throw new TmailError(
           "INVALID_ARGUMENT",
@@ -72,10 +97,36 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
         );
       }
       const provider = options.provider ?? "provider selection";
-      throw new TmailError(
-        "PROVIDER_NOT_AVAILABLE",
-        `${provider} is planned but is not available in this milestone.`,
-      );
+      if (!io.isTTY) {
+        throw new TmailError(
+          "INTERACTIVE_AUTH_REQUIRED",
+          "Account authorization requires an interactive terminal.",
+        );
+      }
+      if (provider !== "gmail") {
+        throw new TmailError(
+          "PROVIDER_NOT_AVAILABLE",
+          `${provider} is planned but is not available in this milestone.`,
+        );
+      }
+      const controller = new AbortController();
+      const cancel = () => controller.abort();
+      process.once("SIGINT", cancel);
+      try {
+        const authorization = await runtime.gmail.authorize(
+          {
+            showAuthorization: (url) => {
+              io.stderr(`Authorize Gmail in your browser:\n${url}\n`);
+              openExternal(url);
+            },
+          },
+          controller.signal,
+        );
+        const account = await runtime.accounts.connectGmail(authorization);
+        write({ account: toPublicAccount(account) });
+      } finally {
+        process.removeListener("SIGINT", cancel);
+      }
     });
 
   accounts
@@ -91,10 +142,8 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
           "--yes is required when standard input is not interactive.",
         );
       }
-      throw new TmailError(
-        "PROVIDER_NOT_AVAILABLE",
-        "Persistent account removal is not available in this milestone.",
-      );
+      const removed = await runtime.accounts.remove(options.account);
+      write({ removedAccountId: removed.id });
     });
 
   const messages = program.command("messages").description("Read messages from one account.");
@@ -105,10 +154,13 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
     .option("--limit <count>", "maximum messages", "30")
     .option("--cursor <cursor>")
     .action(async (options: { account: string; limit: string; cursor?: string }) => {
-      const page = await runtime.mail.list(options.account, {
-        limit: positiveInteger(options.limit),
-        ...(options.cursor ? { cursor: options.cursor } : {}),
-      });
+      const page = await withOperationTimeout(program, (signal) =>
+        runtime.mail.list(options.account, {
+          limit: positiveInteger(options.limit),
+          ...(options.cursor ? { cursor: options.cursor } : {}),
+          signal,
+        }),
+      );
       write({ messages: page.messages }, page.nextCursor);
     });
 
@@ -118,16 +170,20 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
     .requiredOption("--account <account-id>")
     .requiredOption("--message <provider-message-id>")
     .action(async (options: { account: string; message: string }) => {
-      const message = await runtime.mail.read(options.account, options.message);
-      const normalized = await normalizeBody(message.body);
+      const message = await withOperationTimeout(program, (signal) =>
+        runtime.mail.read(options.account, options.message, signal),
+      );
+      const normalized = message.body ? await normalizeBody(message.body) : undefined;
       write({
         message: {
           ...message,
-          body: {
-            format: "markdown",
-            content: normalized.markdown,
-            truncated: normalized.truncated,
-          },
+          body: normalized
+            ? {
+                format: "markdown",
+                content: normalized.markdown,
+                truncated: normalized.truncated,
+              }
+            : null,
         },
       });
     });
@@ -140,10 +196,13 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
     .option("--limit <count>", "maximum messages", "30")
     .option("--cursor <cursor>")
     .action(async (options: { account: string; query: string; limit: string; cursor?: string }) => {
-      const page = await runtime.mail.search(options.account, options.query, {
-        limit: positiveInteger(options.limit),
-        ...(options.cursor ? { cursor: options.cursor } : {}),
-      });
+      const page = await withOperationTimeout(program, (signal) =>
+        runtime.mail.search(options.account, options.query, {
+          limit: positiveInteger(options.limit),
+          ...(options.cursor ? { cursor: options.cursor } : {}),
+          signal,
+        }),
+      );
       write({ messages: page.messages }, page.nextCursor);
     });
 
@@ -159,11 +218,13 @@ export function createProgram(runtime: TmailRuntime, io: CliIo = defaultIo): Com
         account: account
           ? { id: account.id, provider: account.provider, status: account.status }
           : undefined,
-        providers: PROVIDER_CATALOG.map(({ id, status, capabilities }) => ({
-          id,
-          status,
-          capabilities,
-        })),
+        providers: providerCatalog(runtime.gmail.configured).map(
+          ({ id, status, capabilities }) => ({
+            id,
+            status,
+            capabilities,
+          }),
+        ),
         telemetry: false,
       });
     });

@@ -9,6 +9,7 @@ interface HomeScreenProps {
   readonly columns: number;
   readonly rows: number;
   readonly onSelect: (account: Account) => void;
+  readonly onAdd: () => void;
 }
 
 function providerLabel(account: Account): string {
@@ -24,7 +25,13 @@ function providerLabel(account: Account): string {
   }
 }
 
-export function HomeScreen({ accounts: repository, columns, rows, onSelect }: HomeScreenProps) {
+export function HomeScreen({
+  accounts: repository,
+  columns,
+  rows,
+  onSelect,
+  onAdd,
+}: HomeScreenProps) {
   const { exit } = useApp();
   const [accounts, setAccounts] = useState<readonly Account[]>([]);
   const [selected, setSelected] = useState(0);
@@ -45,9 +52,8 @@ export function HomeScreen({ accounts: repository, columns, rows, onSelect }: Ho
       if (account) {
         onSelect(account);
       } else {
-        setNotice(
-          "Gmail, Outlook, and Proton Mail connections are planned for the next milestones.",
-        );
+        setNotice(undefined);
+        onAdd();
       }
     } else if (input === "q") {
       exit();

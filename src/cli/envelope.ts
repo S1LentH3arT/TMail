@@ -20,6 +20,7 @@ export interface ErrorEnvelope {
     readonly code: string;
     readonly message: string;
     readonly retryable: boolean;
+    readonly retryAfterSeconds?: number;
   };
   readonly meta: { readonly requestId: string };
 }
@@ -37,7 +38,14 @@ export function failure(error: TmailError): ErrorEnvelope {
   return {
     schemaVersion: "1",
     ok: false,
-    error: { code: error.code, message: error.message, retryable: error.retryable },
+    error: {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      ...(error.retryAfterSeconds !== undefined
+        ? { retryAfterSeconds: error.retryAfterSeconds }
+        : {}),
+    },
     meta: { requestId: randomUUID() },
   };
 }

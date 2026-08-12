@@ -15,8 +15,13 @@ export interface Account {
   readonly displayName?: string;
   readonly provider: AccountProvider;
   readonly status: AccountStatus;
+  /** Internal deduplication key. Never include this field in public envelopes or logs. */
+  readonly identityKey?: string;
 }
 
-export interface PublicAccount extends Omit<Account, "provider"> {
-  readonly provider: Exclude<AccountProvider, "demo"> | "demo";
+export type PublicAccount = Omit<Account, "identityKey">;
+
+export function toPublicAccount(account: Account): PublicAccount {
+  const { identityKey: _identityKey, ...publicAccount } = account;
+  return publicAccount;
 }
